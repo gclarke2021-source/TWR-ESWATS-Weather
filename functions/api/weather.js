@@ -1,4 +1,10 @@
-// Cloudflare Pages Function: /api/weather
+// Cloudflare Pages Function: /api/weather  (v2)
+//
+// Adds: today's high/low computation, diagnostic error reporting for history fetches.
+//
+// Environment variables:
+//   AW_API_KEY, AW_APP_KEY, LUGAGANENI_MAC, MPANGELA_MAC, STATION_TZ
+
 const AW_BASE = 'https://rt.ambientweather.net/v1';
 const CACHE_TTL_MS = 60 * 1000;
 let cache = { ts: 0, data: null };
@@ -25,6 +31,7 @@ export async function onRequestGet({ env }) {
       { id: 'mpangela', name: 'Mpangela', mac: env.MPANGELA_MAC },
     ];
 
+    // 1. Current data for all devices in one call
     const devicesUrl = `${AW_BASE}/devices?applicationKey=${env.AW_APP_KEY}&apiKey=${env.AW_API_KEY}`;
     const devicesRes = await fetch(devicesUrl);
     if (!devicesRes.ok) {
@@ -36,22 +43,31 @@ export async function onRequestGet({ env }) {
       if (d.macAddress) devicesByMac[d.macAddress.toUpperCase()] = d;
     }
 
+    // 2. Historical data for each station.
+    //    We fetch TWO windows per station: today-so-far (for today hi/lo)
+    //    and yesterday (for yesterday hi/lo + total rain).
+    //    Sequential calls with delay between them to respect the 1 req/sec per-apiKey limit.
     const results = [];
-    for (const station of stations) {
+    for (let i = 0; i < stations.length; i++) {
+      const station = stations[i];
       const mac = station.mac.toUpperCase();
       const device = devicesByMac[mac];
-      let history = [];
-      try {
-        const yesterdayEnd = endOfYesterdayMs(tz);
-        const histUrl = `${AW_BASE}/devices/${encodeURIComponent(mac)}?applicationKey=${env.AW_APP_KEY}&apiKey=${env.AW_API_KEY}&limit=288&endDate=${yesterdayEnd}`;
-        const histRes = await fetch(histUrl);
-        if (histRes.ok) history = await histRes.json();
-      } catch (e) {}
-      await sleep(1100);
-      results.push(buildStationPayload(station, device, history));
+
+      const startOfToday = startOfTodayMs(tz);
+      const historyResults = await fetchHistoryWindows(mac, env, startOfToday);
+
+      results.push(buildStationPayload(station, device, historyResults, startOfToday));
+
+      // Politeness delay between stations (skip after last)
+      if (i < stations.length - 1) await sleep(1200);
     }
 
-    const payload = { fetchedAt: new Date().toISOString(), tz, stations: results };
+    const payload = {
+      fetchedAt: new Date().toISOString(),
+      tz,
+      stations: results,
+    };
+
     cache = { ts: now, data: payload };
     return jsonResponse(payload, false);
   } catch (err) {
@@ -59,22 +75,127 @@ export async function onRequestGet({ env }) {
   }
 }
 
-function buildStationPayload(station, device, history) {
+// Fetch both history windows needed for today/yesterday stats.
+async function fetchHistoryWindows(mac, env, startOfTodayMs) {
+  const result = { today: [], yesterday: [], errors: {} };
+
+  // Today-so-far: endDate = now (default). Filter client-side to startOfToday forward.
+  try {
+    const url = `${AW_BASE}/devices/${encodeURIComponent(mac)}?applicationKey=${env.AW_APP_KEY}&apiKey=${env.AW_API_KEY}&limit=288`;
+    const res = await fetch(url);
+    if (!res.ok) {
+      result.errors.today = `HTTP ${res.status}`;
+    } else {
+      const data = await res.json();
+      if (Array.isArray(data)) {
+        result.today = data.filter(r => typeof r.dateutc === 'number' && r.dateutc >= startOfTodayMs);
+      } else {
+        result.errors.today = 'unexpected response shape';
+      }
+    }
+  } catch (e) {
+    result.errors.today = String(e);
+  }
+
+  await sleep(1200);
+
+  // Yesterday: endDate = start of today in tz. API returns descending 288 records.
+  try {
+    const url = `${AW_BASE}/devices/${encodeURIComponent(mac)}?applicationKey=${env.AW_APP_KEY}&apiKey=${env.AW_API_KEY}&limit=288&endDate=${startOfTodayMs}`;
+    const res = await fetch(url);
+    if (!res.ok) {
+      result.errors.yesterday = `HTTP ${res.status}`;
+    } else {
+      const data = await res.json();
+      if (Array.isArray(data)) {
+        result.yesterday = data;
+      } else {
+        result.errors.yesterday = 'unexpected response shape';
+      }
+    }
+  } catch (e) {
+    result.errors.yesterday = String(e);
+  }
+
+  return result;
+}
+
+function buildStationPayload(station, device, history, startOfTodayMs) {
   if (!device || !device.lastData) {
-    return { id: station.id, name: station.name, online: false, error: 'No recent data' };
+    return {
+      id: station.id,
+      name: station.name,
+      online: false,
+      error: 'No recent data from this station',
+    };
   }
   const d = device.lastData;
-  const yesterday = computeYesterdayStats(history);
+
+  const todayStats = computeHiLo(history.today, d);
+  const yesterdayStats = computeYesterdayStats(history.yesterday);
+
   return {
-    id: station.id, name: station.name, online: true,
+    id: station.id,
+    name: station.name,
+    online: true,
     observedAt: d.date || (d.dateutc ? new Date(d.dateutc).toISOString() : null),
-    tempC: fToC(d.tempf), humidity: d.humidity,
-    tempInC: fToC(d.tempinf), humidityIn: d.humidityin,
-    windKph: mphToKph(d.windspeedmph), windGustKph: mphToKph(d.windgustmph),
-    windDirDeg: d.winddir, windDirCardinal: degToCardinal(d.winddir),
-    rainTodayMm: inToMm(d.dailyrainin), rainRateMmPerHr: inToMm(d.hourlyrainin),
-    pressureHpa: inHgToHpa(d.baromrelin), uv: d.uv, solarWm2: d.solarradiation,
-    yesterday,
+
+    tempC: fToC(d.tempf),
+    humidity: d.humidity,
+    tempInC: fToC(d.tempinf),
+    humidityIn: d.humidityin,
+
+    windKph: mphToKph(d.windspeedmph),
+    windGustKph: mphToKph(d.windgustmph),
+    windDirDeg: d.winddir,
+    windDirCardinal: degToCardinal(d.winddir),
+
+    rainTodayMm: inToMm(d.dailyrainin),
+    rainRateMmPerHr: inToMm(d.hourlyrainin),
+
+    pressureHpa: inHgToHpa(d.baromrelin),
+    uv: d.uv,
+    solarWm2: d.solarradiation,
+
+    today: todayStats,
+    yesterday: yesterdayStats,
+
+    historyErrors: {
+      today: history.errors.today || null,
+      yesterday: history.errors.yesterday || null,
+    },
+    historyCounts: {
+      today: history.today.length,
+      yesterday: history.yesterday.length,
+    },
+  };
+}
+
+function computeHiLo(records, latestCurrent) {
+  if (!Array.isArray(records) || records.length === 0) {
+    if (latestCurrent && typeof latestCurrent.tempf === 'number') {
+      const t = fToC(latestCurrent.tempf);
+      return { tempHighC: t, tempLowC: t };
+    }
+    return { tempHighC: null, tempLowC: null };
+  }
+  let hi = -Infinity, lo = Infinity;
+  let found = false;
+  for (const rec of records) {
+    if (typeof rec.tempf === 'number') {
+      if (rec.tempf > hi) hi = rec.tempf;
+      if (rec.tempf < lo) lo = rec.tempf;
+      found = true;
+    }
+  }
+  if (latestCurrent && typeof latestCurrent.tempf === 'number') {
+    if (latestCurrent.tempf > hi) hi = latestCurrent.tempf;
+    if (latestCurrent.tempf < lo) lo = latestCurrent.tempf;
+    found = true;
+  }
+  return {
+    tempHighC: found ? fToC(hi) : null,
+    tempLowC: found ? fToC(lo) : null,
   };
 }
 
@@ -100,17 +221,18 @@ function computeYesterdayStats(history) {
   };
 }
 
-function fToC(f) { if (typeof f !== 'number') return null; return Math.round((f - 32) * 5/9 * 10)/10; }
-function mphToKph(m) { if (typeof m !== 'number') return null; return Math.round(m * 1.60934 * 10)/10; }
-function inToMm(i) { if (typeof i !== 'number') return null; return Math.round(i * 25.4 * 10)/10; }
-function inHgToHpa(i) { if (typeof i !== 'number') return null; return Math.round(i * 33.8639 * 10)/10; }
+// ---------- unit helpers ----------
+function fToC(f) { if (typeof f !== 'number') return null; return Math.round((f - 32) * 5 / 9 * 10) / 10; }
+function mphToKph(m) { if (typeof m !== 'number') return null; return Math.round(m * 1.60934 * 10) / 10; }
+function inToMm(i) { if (typeof i !== 'number') return null; return Math.round(i * 25.4 * 10) / 10; }
+function inHgToHpa(i) { if (typeof i !== 'number') return null; return Math.round(i * 33.8639 * 10) / 10; }
 function degToCardinal(deg) {
   if (typeof deg !== 'number') return null;
   const dirs = ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];
   return dirs[Math.round(((deg % 360) / 22.5)) % 16];
 }
 
-function endOfYesterdayMs(tz) {
+function startOfTodayMs(tz) {
   const now = new Date();
   const fmt = new Intl.DateTimeFormat('en-US', {
     timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit',
