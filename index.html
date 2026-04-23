@@ -336,6 +336,7 @@
           <span class="humidity-label">Humidity</span>
           <span class="med c-red" data-f="hum">–<span class="unit">%</span></span>
         </div>
+        <div class="hint" data-f="terror" style="display:none;"></div>
       </div>
       <!-- yesterday -->
       <div class="cell">
@@ -400,7 +401,7 @@
   'use strict';
 
   // ── Cache-bust: bump this string on every deploy to force SW to drop old caches ──
-  const BUILD = '20260423-001';
+  const BUILD = '20260423-002';
 
   const API_URL = '/api/weather';
   const REFRESH_MS = 5 * 60 * 1000;
@@ -574,16 +575,27 @@
     // ── Outdoor: current temp + today hi/lo + humidity ──
     set('temp', fmt(station.tempC, 1, '°C'));
 
-    // FIX: today hi/lo — use station-level fields that the API populates
-    // station.today.tempHighC and station.today.tempLowC should come from
-    // the API. If they're missing, fall back to station.tempHighC / tempLowC
-    // which the Ambient API also provides directly on the live record.
+    // Today hi/lo comes from station.today.tempHighC / tempLowC which the API
+    // populates from the /devices/{mac}?limit=288 history call. If that call
+    // was rate-limited, the API returns nulls (NOT current temp) and we show
+    // "–" so the user isn't misled.
     const today = station.today || {};
-    const todayHigh = today.tempHighC  ?? station.tempHighC  ?? null;
-    const todayLow  = today.tempLowC   ?? station.tempLowC   ?? null;
-    setText('today-high', fmtPlain(todayHigh, 1, ''));
-    setText('today-low',  fmtPlain(todayLow,  1, ''));
+    setText('today-high', fmtPlain(today.tempHighC, 1, ''));
+    setText('today-low',  fmtPlain(today.tempLowC,  1, ''));
     set('hum', fmt(station.humidity, 0, '%'));
+
+    // Surface today-history error if there is one (so rate-limits are visible)
+    const terrNode = el.querySelector('[data-f="terror"]');
+    if (terrNode) {
+      const tErr = station.historyErrors && station.historyErrors.today;
+      if (tErr) {
+        terrNode.style.display = '';
+        terrNode.textContent = 'today history: ' + tErr;
+      } else {
+        terrNode.style.display = 'none';
+        terrNode.textContent = '';
+      }
+    }
 
     // ── Wind compass ──
     // Speed value inside compass
