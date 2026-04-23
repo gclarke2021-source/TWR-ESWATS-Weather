@@ -59,7 +59,7 @@ export async function onRequestGet({ env }) {
       results.push(buildStationPayload(station, device, historyResults, startOfToday));
 
       // Politeness delay between stations (skip after last)
-      if (i < stations.length - 1) await sleep(1200);
+      if (i < stations.length - 1) await sleep(2000);
     }
 
     const payload = {
@@ -97,7 +97,7 @@ async function fetchHistoryWindows(mac, env, startOfTodayMs) {
     result.errors.today = String(e);
   }
 
-  await sleep(1200);
+  await sleep(2000);
 
   // Yesterday: endDate = start of today in tz. API returns descending 288 records.
   try {
