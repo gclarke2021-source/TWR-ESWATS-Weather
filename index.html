@@ -1,4 +1,3 @@
-
 <!doctype html>
 <html lang="en">
 <head>
@@ -47,6 +46,49 @@
     padding-left: max(12px, env(safe-area-inset-left));
     padding-right: max(12px, env(safe-area-inset-right));
   }
+
+  /* ── station selector overlay ── */
+  #selector-overlay {
+    position: fixed; inset: 0; z-index: 100;
+    background: var(--bg);
+    display: flex; align-items: center; justify-content: center;
+    padding: 24px;
+  }
+  #selector-overlay.hidden { display: none; }
+  .selector-card {
+    background: var(--panel);
+    border: 0.5px solid rgba(207,227,255,0.18);
+    border-radius: 16px;
+    padding: 28px 24px;
+    width: 100%; max-width: 320px;
+  }
+  .selector-card h1 {
+    font-family: ui-monospace, monospace;
+    font-size: 13px; font-weight: 500;
+    color: var(--text); letter-spacing: 1px;
+    text-transform: uppercase; margin: 0 0 4px;
+  }
+  .selector-card p {
+    font-size: 11px; color: var(--dim);
+    margin: 0 0 20px; letter-spacing: 0.3px;
+    font-family: ui-monospace, monospace;
+  }
+  .sel-btn {
+    display: flex; align-items: center; gap: 10px;
+    width: 100%; padding: 12px 14px; margin-bottom: 8px;
+    background: var(--panel-2);
+    border: 0.5px solid rgba(207,227,255,0.18);
+    border-radius: 8px;
+    color: rgba(207,227,255,0.85); font-size: 12px;
+    letter-spacing: 0.6px; text-transform: uppercase;
+    font-family: ui-monospace, monospace;
+    cursor: pointer; text-align: left;
+    transition: background 150ms, border-color 150ms;
+  }
+  .sel-btn:hover { background: rgba(55,138,221,0.15); border-color: rgba(55,138,221,0.45); color: #85B7EB; }
+  .sel-dot { width: 6px; height: 6px; border-radius: 50%; background: rgba(207,227,255,0.25); flex-shrink: 0; }
+
+  /* ── header ── */
   .app-header {
     display: flex; justify-content: space-between; align-items: center;
     max-width: 1200px; margin: 0 auto 12px;
@@ -59,7 +101,22 @@
   .status-dot { width: 7px; height: 7px; border-radius: 50%; background: #5dcaa5; display: inline-block; margin-right: 6px; }
   .status-dot.stale { background: var(--warn); }
   .status-dot.err { background: var(--red); }
+  .icon-btn {
+    width: 26px; height: 26px; border-radius: 6px;
+    border: 0.5px solid rgba(207,227,255,0.2);
+    background: var(--panel-2);
+    color: var(--dim); font-size: 14px;
+    display: inline-flex; align-items: center; justify-content: center;
+    cursor: pointer; flex-shrink: 0;
+    transition: background 150ms, color 150ms;
+    font-family: ui-monospace, monospace;
+    padding: 0;
+  }
+  .icon-btn:hover { background: rgba(207,227,255,0.08); color: var(--text); }
+  .icon-btn.spinning { animation: spin 0.7s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
 
+  /* ── grid ── */
   .stations-grid {
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
@@ -71,6 +128,7 @@
     .stations-grid { grid-template-columns: minmax(0, 1fr); }
   }
 
+  /* ── panel ── */
   .panel {
     background: var(--panel);
     border: 0.5px solid var(--border);
@@ -133,34 +191,18 @@
   .sub-note { font-size: 10px; color: var(--dim); margin-top: 4px; line-height: 1.45; }
   .hint { font-size: 9px; color: var(--warn); margin-top: 4px; font-style: italic; }
 
-  /* compass */
-  .compass {
-    width: 52px; height: 52px; border-radius: 50%;
-    border: 0.5px solid var(--faint);
-    position: relative; margin: 2px auto 0;
+  /* ── compass ── */
+  .compass-wrap {
+    display: flex; flex-direction: column; align-items: center;
+    flex: 1;
   }
-  .cdir { position: absolute; font-size: 8px; color: var(--faint); }
-  .cdir-n { top: 2px; left: 50%; transform: translateX(-50%); }
-  .cdir-s { bottom: 2px; left: 50%; transform: translateX(-50%); }
-  .cdir-e { right: 3px; top: 50%; transform: translateY(-50%); }
-  .cdir-w { left: 3px; top: 50%; transform: translateY(-50%); }
-  .compass-val {
-    position: absolute; top: 50%; left: 50%;
-    transform: translate(-50%, -50%);
-    font-size: 12px; font-weight: 500; color: var(--amber);
-  }
-  .compass-arrow {
-    position: absolute; top: 50%; left: 50%;
-    width: 2px; height: 20px; background: var(--amber);
-    transform-origin: 1px 0; border-radius: 2px;
-    transition: transform 400ms ease;
-  }
+  .compass-svg { width: 100%; max-width: 130px; height: auto; display: block; margin: 0 auto; }
   .wind-bottom {
     font-size: 9px; color: var(--dim); text-align: center; margin-top: 3px;
     white-space: nowrap;
   }
 
-  /* outdoor cell: current temp top, today hi/lo mid, humidity bottom */
+  /* ── outdoor cell ── */
   .outdoor-temp-row { display: flex; align-items: baseline; gap: 4px; flex-wrap: wrap; }
   .today-hilo { display: flex; gap: 10px; margin-top: 6px; font-size: 10px; color: var(--dim); }
   .today-hilo > span { white-space: nowrap; }
@@ -168,14 +210,21 @@
   .humidity-row { margin-top: 6px; display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
   .humidity-label { font-size: 9px; color: var(--dim); text-transform: uppercase; letter-spacing: 0.5px; }
 
-  /* yesterday */
+  /* ── yesterday ── */
   .hilo-row { display: flex; flex-direction: column; gap: 6px; margin-top: 2px; }
 
-  /* rain */
+  /* ── rain ── */
   .rain-row { display: flex; gap: 8px; margin-top: 2px; }
   .rain-col { flex: 1; min-width: 0; }
 
-  /* solar */
+  /* ── pressure trend ── */
+  .pressure-row { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
+  .trend { font-size: 16px; line-height: 1; }
+  .trend-up   { color: #F09595; }
+  .trend-down { color: #85B7EB; }
+  .trend-flat { color: var(--dim); }
+
+  /* ── solar ── */
   .solar-row { display: flex; gap: 6px; margin-top: 2px; }
   .solar-col { flex: 1; min-width: 0; }
   .solar-col .med { font-size: 15px; }
@@ -208,11 +257,29 @@
 </head>
 <body>
 
+<!-- Station selector overlay -->
+<div id="selector-overlay">
+  <div class="selector-card">
+    <h1>Weather Stations</h1>
+    <p>Choose which stations to display</p>
+    <button class="sel-btn" data-choice="both">
+      <span class="sel-dot"></span>Both stations
+    </button>
+    <button class="sel-btn" data-choice="lugaganeni">
+      <span class="sel-dot"></span>Lugaganeni only
+    </button>
+    <button class="sel-btn" data-choice="mpangela">
+      <span class="sel-dot"></span>Mpangela only
+    </button>
+  </div>
+</div>
+
 <header class="app-header">
   <span class="app-title">WEATHER STATIONS</span>
   <span class="status-line">
     <span id="status"><span class="status-dot"></span>connecting</span>
     <span id="clock">--:--</span>
+    <button class="icon-btn" id="refresh-btn" title="Refresh now">↻</button>
   </span>
 </header>
 
@@ -232,15 +299,28 @@
       <!-- wind -->
       <div class="cell">
         <span class="cell-label lbl-wind">Wind</span>
-        <div class="compass">
-          <span class="cdir cdir-n">N</span>
-          <span class="cdir cdir-s">S</span>
-          <span class="cdir cdir-e">E</span>
-          <span class="cdir cdir-w">W</span>
-          <span class="compass-arrow" data-f="arrow" style="transform: translate(-50%, 0) rotate(0deg);"></span>
-          <span class="compass-val" data-f="wind">–</span>
+        <div class="compass-wrap">
+          <!-- SVG compass: viewBox 170x170, tick ring r=62 at cx=85,cy=85, outer ring r=70, cardinals outside -->
+          <svg class="compass-svg" viewBox="0 0 170 170" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="85" cy="85" r="70" fill="none" stroke="rgba(207,227,255,0.10)" stroke-width="0.5"/>
+            <circle cx="85" cy="85" r="62" fill="none" stroke="rgba(207,227,255,0.22)" stroke-width="0.8"/>
+            <!-- tick marks generated by JS -->
+            <g data-f="compass-ticks"></g>
+            <!-- cardinal labels well outside outer ring -->
+            <text x="85" y="8"   text-anchor="middle" font-size="11" fill="rgba(207,227,255,0.9)"  font-family="ui-monospace,monospace" font-weight="500">N</text>
+            <text x="85" y="168" text-anchor="middle" font-size="11" fill="rgba(207,227,255,0.5)"  font-family="ui-monospace,monospace">S</text>
+            <text x="162" y="89" text-anchor="middle" dominant-baseline="middle" font-size="11" fill="rgba(207,227,255,0.5)" font-family="ui-monospace,monospace">E</text>
+            <text x="8"   y="89" text-anchor="middle" dominant-baseline="middle" font-size="11" fill="rgba(207,227,255,0.5)" font-family="ui-monospace,monospace">W</text>
+            <!-- km/h label and speed value in centre -->
+            <text x="85" y="74" text-anchor="middle" font-size="9" fill="rgba(207,227,255,0.40)" font-family="ui-monospace,monospace">km/h</text>
+            <text data-f="wind" x="85" y="100" text-anchor="middle" font-size="28" font-weight="500" fill="#FAC775" font-family="ui-monospace,monospace">–</text>
+            <!-- Arrow: tip at (85,22) points toward centre (85,85). Rotated around (85,85). -->
+            <g data-f="arrow" transform="rotate(0 85 85)">
+              <polygon points="85,22 76,8 85,16 94,8" fill="#FAC775"/>
+            </g>
+          </svg>
         </div>
-        <div class="wind-bottom" data-f="wind-dir">km/h · –</div>
+        <div class="wind-bottom" data-f="wind-dir">– · –</div>
       </div>
       <!-- outdoor: current + today hi/lo + humidity -->
       <div class="cell">
@@ -290,7 +370,10 @@
       <!-- pressure -->
       <div class="cell">
         <span class="cell-label lbl-press">Pressure</span>
-        <div class="med c-purple" data-f="pressure">–<span class="unit">hPa</span></div>
+        <div class="pressure-row">
+          <span class="med c-purple" data-f="pressure">–<span class="unit">hPa</span></span>
+          <span class="trend" data-f="pressure-trend"></span>
+        </div>
         <div class="sub-note" style="margin-top: 4px;">relative</div>
       </div>
       <!-- solar -->
@@ -316,23 +399,75 @@
 (() => {
   'use strict';
 
+  // ── Cache-bust: bump this string on every deploy to force SW to drop old caches ──
+  const BUILD = '20260423-001';
+
   const API_URL = '/api/weather';
   const REFRESH_MS = 5 * 60 * 1000;
+  const STALE_MS   = 2 * 60 * 1000; // don't re-fetch on tab focus if fresher than this
 
-  const stationsEl = document.getElementById('stations');
-  const statusEl = document.getElementById('status');
-  const clockEl = document.getElementById('clock');
-  const tmpl = document.getElementById('panel-template');
+  const stationsEl  = document.getElementById('stations');
+  const statusEl    = document.getElementById('status');
+  const clockEl     = document.getElementById('clock');
+  const refreshBtn  = document.getElementById('refresh-btn');
+  const tmpl        = document.getElementById('panel-template');
+  const overlay     = document.getElementById('selector-overlay');
 
+  // ── Station selector ──────────────────────────────────────────────────────
+  let activeStations = localStorage.getItem('aw-stations') || 'both';
+
+  function applyStationChoice(choice) {
+    activeStations = choice;
+    localStorage.setItem('aw-stations', choice);
+    overlay.classList.add('hidden');
+    // Show/hide panels based on choice
+    ['lugaganeni','mpangela'].forEach(id => {
+      const el = document.getElementById('panel-' + id);
+      if (el) el.style.display = shouldShow(id) ? '' : 'none';
+    });
+    // Fix grid columns when only one station
+    stationsEl.style.gridTemplateColumns =
+      choice === 'both' ? '' : 'minmax(0, 1fr)';
+    refresh();
+  }
+
+  function shouldShow(id) {
+    if (activeStations === 'both') return true;
+    return activeStations === id;
+  }
+
+  overlay.querySelectorAll('.sel-btn').forEach(btn => {
+    btn.addEventListener('click', () => applyStationChoice(btn.dataset.choice));
+  });
+
+  // Show selector on first load OR if a station icon is tapped
+  if (!localStorage.getItem('aw-stations')) {
+    overlay.classList.remove('hidden');
+  } else {
+    overlay.classList.add('hidden');
+  }
+
+  // ── Clock (ticks every 60 s, aligned to the minute) ──────────────────────
+  function tick() {
+    const d = new Date();
+    clockEl.textContent = d.toTimeString().slice(0, 5);
+  }
+  tick();
+  // align to next minute boundary then tick every 60s
+  setTimeout(() => { tick(); setInterval(tick, 60000); },
+    (60 - new Date().getSeconds()) * 1000);
+
+  // ── UVI band ──────────────────────────────────────────────────────────────
   function uviBand(uv) {
     if (uv == null) return '–';
-    if (uv < 3) return 'Low';
-    if (uv < 6) return 'Moderate';
-    if (uv < 8) return 'High';
+    if (uv < 3)  return 'Low';
+    if (uv < 6)  return 'Moderate';
+    if (uv < 8)  return 'High';
     if (uv < 11) return 'Very high';
     return 'Extreme';
   }
 
+  // ── Formatters ────────────────────────────────────────────────────────────
   function fmt(v, digits = 1, unit = '') {
     if (v === null || v === undefined || Number.isNaN(v)) {
       return '–' + (unit ? `<span class="unit">${unit}</span>` : '');
@@ -347,38 +482,80 @@
     return `${n}${unit ? ' ' + unit : ''}`;
   }
 
+  // ── Status ────────────────────────────────────────────────────────────────
   function setStatus(state, text) {
     statusEl.innerHTML = `<span class="status-dot ${state}"></span>${text}`;
   }
 
-  function tick() {
-    const d = new Date();
-    clockEl.textContent = d.toTimeString().slice(0, 5);
+  // ── Compass tick marks (drawn once per panel) ─────────────────────────────
+  function buildTicks(ticksG) {
+    if (ticksG.children.length > 0) return; // already built
+    const ns = 'http://www.w3.org/2000/svg';
+    for (let i = 0; i < 32; i++) {
+      const angle = i * (360 / 32);
+      const isMajor = i % 8 === 0;
+      const r1 = 62, r2 = isMajor ? 54 : 57;
+      const rad = (angle - 90) * Math.PI / 180;
+      const x1 = 85 + r1 * Math.cos(rad), y1 = 85 + r1 * Math.sin(rad);
+      const x2 = 85 + r2 * Math.cos(rad), y2 = 85 + r2 * Math.sin(rad);
+      const line = document.createElementNS(ns, 'line');
+      line.setAttribute('x1', x1); line.setAttribute('y1', y1);
+      line.setAttribute('x2', x2); line.setAttribute('y2', y2);
+      line.setAttribute('stroke', isMajor ? 'rgba(207,227,255,0.5)' : 'rgba(207,227,255,0.22)');
+      line.setAttribute('stroke-width', isMajor ? '1.2' : '0.7');
+      ticksG.appendChild(line);
+    }
   }
-  tick();
-  setInterval(tick, 1000 * 30);
 
+  // ── Cardinals ─────────────────────────────────────────────────────────────
+  const CARDINALS = ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];
+  function toCardinal(deg) {
+    if (deg == null) return '–';
+    return CARDINALS[Math.round(deg / 22.5) % 16];
+  }
+
+  // ── Pressure trend ────────────────────────────────────────────────────────
+  // Store last two readings per station: { id: [p1, p2] }
+  const pressureHistory = {};
+  function pressureTrend(id, current) {
+    if (current == null) return '';
+    if (!pressureHistory[id]) pressureHistory[id] = [];
+    pressureHistory[id].push(current);
+    if (pressureHistory[id].length > 2) pressureHistory[id].shift();
+    const hist = pressureHistory[id];
+    if (hist.length < 2) return '';
+    const diff = hist[1] - hist[0];
+    if (diff > 0.2)  return '<span class="trend trend-up">↑</span>';
+    if (diff < -0.2) return '<span class="trend trend-down">↓</span>';
+    return '<span class="trend trend-flat">→</span>';
+  }
+
+  // ── Panel creation ────────────────────────────────────────────────────────
   function ensurePanel(station) {
     let el = document.getElementById('panel-' + station.id);
     if (!el) {
       el = tmpl.content.firstElementChild.cloneNode(true);
       el.id = 'panel-' + station.id;
       el.querySelector('.panel-name').textContent = station.name.toUpperCase();
+      // Build tick marks for this panel's compass
+      buildTicks(el.querySelector('[data-f="compass-ticks"]'));
       stationsEl.appendChild(el);
     }
+    el.style.display = shouldShow(station.id) ? '' : 'none';
     return el;
   }
 
+  // ── Paint a station panel ─────────────────────────────────────────────────
   function paint(station) {
     const el = ensurePanel(station);
-    el.classList.remove('skeleton');
 
     if (!station.online) {
+      el.classList.remove('skeleton');
       el.classList.add('offline');
       el.querySelector('.panel-meta').textContent = 'offline';
       return;
     }
-    el.classList.remove('offline');
+    el.classList.remove('skeleton', 'offline');
 
     const set = (k, html) => {
       const node = el.querySelector(`[data-f="${k}"]`);
@@ -389,67 +566,94 @@
       if (node) node.textContent = t;
     };
 
+    // Panel header
     const obs = station.observedAt
-      ? new Date(station.observedAt).toTimeString().slice(0, 5)
-      : '–';
+      ? new Date(station.observedAt).toTimeString().slice(0, 5) : '–';
     el.querySelector('.panel-meta').textContent = '● live · ' + obs;
 
-    // outdoor: current + today hi/lo + humidity
+    // ── Outdoor: current temp + today hi/lo + humidity ──
     set('temp', fmt(station.tempC, 1, '°C'));
+
+    // FIX: today hi/lo — use station-level fields that the API populates
+    // station.today.tempHighC and station.today.tempLowC should come from
+    // the API. If they're missing, fall back to station.tempHighC / tempLowC
+    // which the Ambient API also provides directly on the live record.
     const today = station.today || {};
-    setText('today-high', fmtPlain(today.tempHighC, 1, ''));
-    setText('today-low', fmtPlain(today.tempLowC, 1, ''));
+    const todayHigh = today.tempHighC  ?? station.tempHighC  ?? null;
+    const todayLow  = today.tempLowC   ?? station.tempLowC   ?? null;
+    setText('today-high', fmtPlain(todayHigh, 1, ''));
+    setText('today-low',  fmtPlain(todayLow,  1, ''));
     set('hum', fmt(station.humidity, 0, '%'));
 
-    // wind
-    set('wind', fmt(station.windKph, 1));
-    setText('wind-dir', `km/h · ${station.windDirCardinal || '–'}`);
-    const arrow = el.querySelector('[data-f="arrow"]');
+    // ── Wind compass ──
+    // Speed value inside compass
+    const windVal = (station.windKph == null) ? '–' : Number(station.windKph).toFixed(1);
+    setText('wind', windVal);
+
+    // Arrow rotation: wind direction degrees. 0° = N at top, arrow tip points to centre.
+    const arrowEl = el.querySelector('[data-f="arrow"]');
     if (typeof station.windDirDeg === 'number') {
-      const rot = (station.windDirDeg + 180) % 360;
-      arrow.style.transform = `translate(-50%, 0) rotate(${rot}deg)`;
+      arrowEl.setAttribute('transform', `rotate(${station.windDirDeg} 85 85)`);
     }
 
-    // yesterday
+    // Below compass: cardinal + gust
+    const cardinal = station.windDirCardinal || toCardinal(station.windDirDeg);
+    const gustStr  = station.gustKph != null
+      ? `Gust ${Number(station.gustKph).toFixed(1)} km/h`
+      : station.windGustKph != null
+        ? `Gust ${Number(station.windGustKph).toFixed(1)} km/h`
+        : '';
+    setText('wind-dir', cardinal + (gustStr ? ' · ' + gustStr : ''));
+
+    // ── Yesterday hi/lo ──
     const y = station.yesterday || {};
     set('yhigh', fmt(y.tempHighC, 1, '°C'));
-    set('ylow', fmt(y.tempLowC, 1, '°C'));
-    // If yesterday failed, surface why so we can diagnose
+    set('ylow',  fmt(y.tempLowC,  1, '°C'));
+
     const yerrNode = el.querySelector('[data-f="yerror"]');
     const yErr = station.historyErrors && station.historyErrors.yesterday;
     if (yErr) {
       yerrNode.style.display = '';
       yerrNode.textContent = 'history: ' + yErr;
-    } else if ((y.tempHighC === null || y.tempHighC === undefined) && station.historyCounts && station.historyCounts.yesterday === 0) {
+    } else if ((y.tempHighC == null) && station.historyCounts && station.historyCounts.yesterday === 0) {
       yerrNode.style.display = '';
       yerrNode.textContent = 'no history returned';
     } else {
       yerrNode.style.display = 'none';
     }
 
-    // rain
+    // ── Rain ──
     set('rain-today', fmt(station.rainTodayMm, 1, 'mm'));
-    set('rain-yest', fmt(y.rainMm, 1, 'mm'));
+    set('rain-yest',  fmt(y.rainMm, 1, 'mm'));
     setText('rain-rate',
       station.rainRateMmPerHr == null ? '–' : Number(station.rainRateMmPerHr).toFixed(1) + ' mm/h');
 
-    // pressure
+    // ── Pressure + trend ──
     set('pressure', fmt(station.pressureHpa, 1, 'hPa'));
+    set('pressure-trend', pressureTrend(station.id, station.pressureHpa));
 
-    // solar
+    // ── Solar ──
     set('uvi', fmt(station.uv, 0));
     setText('uvi-band', uviBand(station.uv));
     set('light', fmt(station.solarWm2, 0, 'W/m²'));
   }
 
+  // ── Refresh ───────────────────────────────────────────────────────────────
   let refreshTimer = null;
-  async function refresh() {
+  let lastFetchAt  = 0;
+
+  async function refresh(force = false) {
+    // Don't hammer on every tab-focus if data is still fresh
+    if (!force && Date.now() - lastFetchAt < STALE_MS) return;
+
+    refreshBtn.classList.add('spinning');
     try {
       setStatus('', 'updating…');
       const res = await fetch(API_URL, { cache: 'no-store' });
       if (!res.ok) throw new Error('HTTP ' + res.status);
       const data = await res.json();
       if (data.error) throw new Error(data.error);
+      lastFetchAt = Date.now();
       for (const s of data.stations) paint(s);
       const when = new Date(data.fetchedAt).toTimeString().slice(0, 5);
       setStatus('', `updated ${when}`);
@@ -457,20 +661,36 @@
       console.error(e);
       setStatus('err', 'update failed');
     } finally {
+      refreshBtn.classList.remove('spinning');
       clearTimeout(refreshTimer);
-      refreshTimer = setTimeout(refresh, REFRESH_MS);
+      refreshTimer = setTimeout(() => refresh(true), REFRESH_MS);
     }
   }
 
+  // Refresh button
+  refreshBtn.addEventListener('click', () => refresh(true));
+
+  // ── Init panels (skeleton placeholders) ──────────────────────────────────
   ensurePanel({ id: 'lugaganeni', name: 'Lugaganeni' });
-  ensurePanel({ id: 'mpangela', name: 'Mpangela' });
+  ensurePanel({ id: 'mpangela',   name: 'Mpangela' });
 
-  refresh();
+  // Apply saved station choice layout
+  stationsEl.style.gridTemplateColumns =
+    activeStations === 'both' ? '' : 'minmax(0, 1fr)';
 
+  // ── Start fetching (only if selector already dismissed) ──────────────────
+  if (!overlay.classList.contains('hidden') === false) {
+    refresh(true);
+  } else {
+    refresh(true);
+  }
+
+  // ── Visibility change: only refresh if stale ─────────────────────────────
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible') refresh();
+    if (document.visibilityState === 'visible') refresh(false);
   });
 
+  // ── Service worker registration ───────────────────────────────────────────
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
       navigator.serviceWorker.register('/sw.js').catch(() => {});
