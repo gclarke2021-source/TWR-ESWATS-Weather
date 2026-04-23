@@ -173,6 +173,13 @@ function buildStationPayload(station, device, history, startOfTodayMs) {
 
 function computeHiLo(records, latestCurrent) {
   if (!Array.isArray(records) || records.length === 0) {
+    // Prefer the station's own rolling daily hi/lo fields over current temp
+    if (latestCurrent && typeof latestCurrent.tempmaxf === 'number') {
+      return {
+        tempHighC: fToC(latestCurrent.tempmaxf),
+        tempLowC:  fToC(latestCurrent.tempminf),
+      };
+    }
     if (latestCurrent && typeof latestCurrent.tempf === 'number') {
       const t = fToC(latestCurrent.tempf);
       return { tempHighC: t, tempLowC: t };
