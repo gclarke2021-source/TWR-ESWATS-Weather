@@ -1,6 +1,6 @@
 // Cache version — bump this (or redeploy) to force all installed PWAs to update
 // This timestamp is replaced at deploy time; changing it invalidates the old cache.
-const CACHE = 'weather-v20260423-002';
+const CACHE = 'weather-v20260505-001';
 const SHELL = ['/', '/index.html', '/manifest.webmanifest', '/icon.svg', '/icon-192.png', '/icon-512.png'];
 
 self.addEventListener('install', (e) => {
