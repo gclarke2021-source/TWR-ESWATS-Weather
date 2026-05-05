@@ -1,3 +1,4 @@
+
 <!doctype html>
 <html lang="en">
 <head>
@@ -204,6 +205,21 @@
 
   /* ── outdoor cell ── */
   .outdoor-temp-row { display: flex; align-items: baseline; gap: 4px; flex-wrap: wrap; }
+
+  /* ── weather condition icon (in outdoor cell) ── */
+  .weather-icon-wrap {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin-top: 10px;
+    min-height: 56px;
+  }
+  .weather-icon-wrap svg {
+    width: 56px;
+    height: 56px;
+    display: block;
+  }
+  .weather-icon-wrap:empty { display: none; }
   .today-hilo { display: flex; gap: 10px; margin-top: 6px; font-size: 10px; color: var(--dim); }
   .today-hilo > span { white-space: nowrap; }
   .today-hilo span.val { color: var(--white); font-weight: 500; }
@@ -280,6 +296,12 @@
     <span id="status"><span class="status-dot"></span>connecting</span>
     <span id="clock">--:--</span>
     <button class="icon-btn" id="refresh-btn" title="Refresh now">↻</button>
+    <button class="icon-btn" id="settings-btn" title="Choose stations">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14" style="display:block">
+        <circle cx="12" cy="12" r="3"/>
+        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+      </svg>
+    </button>
   </span>
 </header>
 
@@ -336,6 +358,7 @@
           <span class="humidity-label">Humidity</span>
           <span class="med c-red" data-f="hum">–<span class="unit">%</span></span>
         </div>
+        <div class="weather-icon-wrap" data-f="weather-icon"></div>
         <div class="hint" data-f="terror" style="display:none;"></div>
       </div>
       <!-- yesterday -->
@@ -547,6 +570,111 @@
   }
 
   // ── Paint a station panel ─────────────────────────────────────────────────
+  // ── Weather condition ─────────────────────────────────────────────────────
+  // Both stations are in Eswatini (Lugaganeni & Mpangela), close to lat -26.5°
+  // lon 31.4°. Used for the solar position model that drives the day/night and
+  // expected-clear-sky-irradiance calculation.
+  const STATION_LAT = -26.5;
+  const STATION_LON = 31.4;
+
+  // Approximate clear-sky solar irradiance (W/m²) at the given UTC instant
+  // for the station's lat/lon. Returns 0 when the sun is below the horizon.
+  function expectedClearSkySolar(date) {
+    const toRad = (d) => d * Math.PI / 180;
+    // Day of year, 1..366
+    const start = Date.UTC(date.getUTCFullYear(), 0, 0);
+    const dayOfYear = Math.floor((date.getTime() - start) / 86400000);
+    // Solar declination (Cooper's equation), degrees
+    const decl = 23.45 * Math.sin(toRad(360 * (284 + dayOfYear) / 365));
+    // Solar noon at our longitude, in UTC hours
+    const utcHours = date.getUTCHours() + date.getUTCMinutes() / 60 + date.getUTCSeconds() / 3600;
+    const solarNoonUTC = 12 - STATION_LON / 15;
+    const hourAngle = 15 * (utcHours - solarNoonUTC);
+    // Sun elevation
+    const sinElev =
+      Math.sin(toRad(decl)) * Math.sin(toRad(STATION_LAT)) +
+      Math.cos(toRad(decl)) * Math.cos(toRad(STATION_LAT)) * Math.cos(toRad(hourAngle));
+    if (sinElev <= 0) return 0;
+    // Clear-sky max ~ 1100 W/m² at zenith, scales ~ sin(elev)
+    return 1100 * sinElev;
+  }
+
+  // Decide weather condition. Returns one of:
+  //   'sunny', 'partly-cloudy-day', 'cloudy', 'cloudy-rain'
+  //   'clear-night', 'partly-cloudy-night', 'cloudy-night', 'cloudy-rain-night'
+  function getCondition(station) {
+    const obsDate = station.observedAt ? new Date(station.observedAt) : new Date();
+    const expected = expectedClearSkySolar(obsDate);
+    const measured = (typeof station.solarWm2 === 'number') ? station.solarWm2 : 0;
+    const isRaining = (typeof station.rainRateMmPerHr === 'number')
+      ? station.rainRateMmPerHr > 0.05
+      : false;
+    // Daylight: sun is above horizon (expected > ~50 W/m² catches dusk/dawn)
+    const isDay = expected > 50;
+
+    if (isDay) {
+      if (isRaining) return 'cloudy-rain';
+      // Cloud-cover ratio = measured / expected, clamped to [0, 1.2]
+      const ratio = expected > 0 ? Math.max(0, measured) / expected : 0;
+      if (ratio >= 0.70) return 'sunny';
+      if (ratio >= 0.35) return 'partly-cloudy-day';
+      return 'cloudy';
+    } else {
+      // Night: no reliable cloud-cover signal from the station alone, so just
+      // surface rain vs clear.
+      if (isRaining) return 'cloudy-rain-night';
+      return 'clear-night';
+    }
+  }
+
+  // Inline SVG for each condition. 64x64 viewBox, sized via CSS in the wrap.
+  const WEATHER_SVGS = {
+    'sunny': `<svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="32" cy="32" r="11" fill="#FAC775"/>
+      <g stroke="#FAC775" stroke-width="2.5" stroke-linecap="round">
+        <line x1="32" y1="6" x2="32" y2="13"/><line x1="32" y1="51" x2="32" y2="58"/>
+        <line x1="6" y1="32" x2="13" y2="32"/><line x1="51" y1="32" x2="58" y2="32"/>
+        <line x1="13.6" y1="13.6" x2="18.4" y2="18.4"/><line x1="45.6" y1="45.6" x2="50.4" y2="50.4"/>
+        <line x1="13.6" y1="50.4" x2="18.4" y2="45.6"/><line x1="45.6" y1="18.4" x2="50.4" y2="13.6"/>
+      </g></svg>`,
+    'partly-cloudy-day': `<svg viewBox="0 0 72 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="26" cy="22" r="10" fill="#FAC775"/>
+      <g stroke="#FAC775" stroke-width="2" stroke-linecap="round">
+        <line x1="26" y1="2" x2="26" y2="7"/><line x1="6" y1="22" x2="11" y2="22"/>
+        <line x1="11.4" y1="7.4" x2="14.9" y2="10.9"/><line x1="37.1" y1="10.9" x2="40.6" y2="7.4"/>
+        <line x1="11.4" y1="36.6" x2="14.9" y2="33.1"/>
+      </g>
+      <path d="M28 50 Q22 50 22 44 Q22 38 28 38 Q30 32 38 32 Q47 32 49 39 Q56 39 56 46 Q56 53 49 53 L28 53 Q24 53 24 50 Z" fill="#85B7EB" stroke="#cfe3ff" stroke-width="0.8"/>
+    </svg>`,
+    'cloudy': `<svg viewBox="0 0 64 56" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M14 44 Q6 44 6 36 Q6 28 14 28 Q16 18 28 18 Q42 18 44 30 Q54 30 54 38 Q54 46 46 46 L14 46 Q10 46 10 44 Z" fill="#85B7EB" stroke="#cfe3ff" stroke-width="0.8"/>
+    </svg>`,
+    'cloudy-rain': `<svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M14 36 Q6 36 6 28 Q6 20 14 20 Q16 10 28 10 Q42 10 44 22 Q54 22 54 30 Q54 38 46 38 L14 38 Q10 38 10 36 Z" fill="#85B7EB" stroke="#cfe3ff" stroke-width="0.8"/>
+      <g stroke="#378ADD" stroke-width="2.5" stroke-linecap="round">
+        <line x1="18" y1="46" x2="14" y2="56"/><line x1="30" y1="46" x2="26" y2="56"/><line x1="42" y1="46" x2="38" y2="56"/>
+      </g></svg>`,
+    'clear-night': `<svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M30 6 A18 18 0 1 0 42 30 A14 14 0 0 1 30 6 Z" fill="#cfe3ff"/>
+    </svg>`,
+    'partly-cloudy-night': `<svg viewBox="0 0 72 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M30 6 A16 16 0 1 0 42 28 A12 12 0 0 1 30 6 Z" fill="#cfe3ff"/>
+      <path d="M28 50 Q22 50 22 44 Q22 38 28 38 Q30 32 38 32 Q47 32 49 39 Q56 39 56 46 Q56 53 49 53 L28 53 Q24 53 24 50 Z" fill="#85B7EB" stroke="#cfe3ff" stroke-width="0.8"/>
+    </svg>`,
+    'cloudy-night': `<svg viewBox="0 0 64 56" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M14 44 Q6 44 6 36 Q6 28 14 28 Q16 18 28 18 Q42 18 44 30 Q54 30 54 38 Q54 46 46 46 L14 46 Q10 46 10 44 Z" fill="#5a7898" stroke="#cfe3ff" stroke-width="0.8"/>
+    </svg>`,
+    'cloudy-rain-night': `<svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M14 36 Q6 36 6 28 Q6 20 14 20 Q16 10 28 10 Q42 10 44 22 Q54 22 54 30 Q54 38 46 38 L14 38 Q10 38 10 36 Z" fill="#5a7898" stroke="#cfe3ff" stroke-width="0.8"/>
+      <g stroke="#378ADD" stroke-width="2.5" stroke-linecap="round">
+        <line x1="18" y1="46" x2="14" y2="56"/><line x1="30" y1="46" x2="26" y2="56"/><line x1="42" y1="46" x2="38" y2="56"/>
+      </g></svg>`
+  };
+
+  function weatherIconSvg(condition) {
+    return WEATHER_SVGS[condition] || '';
+  }
+
   function paint(station) {
     const el = ensurePanel(station);
 
@@ -583,6 +711,11 @@
     setText('today-high', fmtPlain(today.tempHighC, 1, ''));
     setText('today-low',  fmtPlain(today.tempLowC,  1, ''));
     set('hum', fmt(station.humidity, 0, '%'));
+
+    // Weather condition icon (sun/moon/clouds/rain in the outdoor cell)
+    const condition = getCondition(station);
+    const iconNode = el.querySelector('[data-f="weather-icon"]');
+    if (iconNode) iconNode.innerHTML = weatherIconSvg(condition);
 
     // Surface today-history error if there is one (so rate-limits are visible)
     const terrNode = el.querySelector('[data-f="terror"]');
@@ -681,6 +814,14 @@
 
   // Refresh button
   refreshBtn.addEventListener('click', () => refresh(true));
+
+  // ── Settings (cog) — re-open the station selector overlay ─────────────────
+  const settingsBtn = document.getElementById('settings-btn');
+  if (settingsBtn) {
+    settingsBtn.addEventListener('click', () => {
+      overlay.classList.remove('hidden');
+    });
+  }
 
   // ── Init panels (skeleton placeholders) ──────────────────────────────────
   ensurePanel({ id: 'lugaganeni', name: 'Lugaganeni' });
