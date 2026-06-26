@@ -4,6 +4,7 @@
   "description": "Live dashboard for two Ambient Weather stations",
   "start_url": "/",
   "display": "standalone",
+  "display_override": ["window-controls-overlay"],
   "orientation": "any",
   "background_color": "#06101f",
   "theme_color": "#0a1428",
