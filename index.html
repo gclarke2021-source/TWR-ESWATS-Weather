@@ -97,6 +97,20 @@
     font-size: 12px; color: var(--dim); letter-spacing: 0.5px;
     gap: 8px;
   }
+   /* ── installed-PWA title bar (Window Controls Overlay) ── */
+  @media (display-mode: window-controls-overlay) {
+    /* push content down clear of the OS control buttons */
+    body { padding-top: env(titlebar-area-height, 40px); }
+
+    /* the header becomes the OS drag handle */
+    .app-header { -webkit-app-region: drag; }
+
+    /* anything interactive must opt back out of dragging */
+    .app-title,
+    .app-header #status,
+    .app-header #clock,
+    .app-header .icon-btn { -webkit-app-region: no-drag; }
+  }
   .app-title { color: var(--text); font-weight: 500; white-space: nowrap; }
   .status-line { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
   .status-dot { width: 7px; height: 7px; border-radius: 50%; background: #5dcaa5; display: inline-block; margin-right: 6px; }
